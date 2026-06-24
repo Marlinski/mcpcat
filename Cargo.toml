@@ -1,0 +1,11 @@
+[package]
+name = "mcpcat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.6.1", features = ["derive"] }
+rmcp = { version = "1.8.0", default-features = false, features = ["client", "macros", "transport-child-process", "transport-streamable-http-client-reqwest", "client-side-sse", "reqwest-native-tls"] }
+serde_json = "1.0.150"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "io-std", "process"] }
