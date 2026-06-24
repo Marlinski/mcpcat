@@ -30,6 +30,10 @@ type Client = RunningService<RoleClient, ()>;
                   • a URL  (http(s)://host/path)        → Streamable HTTP transport\n  \
                   • a command + args                    → stdio transport (spawned)\n\n\
                   Options (like -p) must come BEFORE the SERVER spec.\n\n\
+                  If SERVER is omitted, it is read from the MCPCAT_SERVER \
+                  environment variable, so you can:\n  \
+                  export MCPCAT_SERVER=http://localhost:3001/mcp\n  \
+                  mcpcat tools          # and shell, call, resources, … just work\n\n\
                   Examples:\n  \
                   mcpcat tools http://localhost:3001/mcp\n  \
                   mcpcat call echo -p '{\"message\":\"hi\"}' http://localhost:3001/mcp\n  \
@@ -107,14 +111,34 @@ enum Cmd {
 #[derive(Args, Clone)]
 struct ServerSpec {
     /// URL (Streamable HTTP) or a command + args (stdio). Must come last.
+    /// If omitted, falls back to the MCPCAT_SERVER environment variable.
     #[arg(
         trailing_var_arg = true,
         allow_hyphen_values = true,
-        required = true,
-        num_args = 1..,
+        num_args = 0..,
         value_name = "SERVER"
     )]
     server: Vec<String>,
+}
+
+impl ServerSpec {
+    /// Resolve the server spec: explicit args win; otherwise fall back to the
+    /// `MCPCAT_SERVER` env var (whitespace-split, so it can hold a stdio
+    /// command line as well as a URL).
+    fn resolve(&self) -> Result<Vec<String>> {
+        if !self.server.is_empty() {
+            return Ok(self.server.clone());
+        }
+        match std::env::var("MCPCAT_SERVER") {
+            Ok(s) if !s.trim().is_empty() => {
+                Ok(s.split_whitespace().map(String::from).collect())
+            }
+            _ => bail!(
+                "no server specified: pass a SERVER (a URL or a command) \
+                 or set the MCPCAT_SERVER environment variable"
+            ),
+        }
+    }
 }
 
 #[tokio::main]
@@ -124,37 +148,37 @@ async fn main() -> Result<()> {
 
     match cli.cmd {
         Cmd::Tools { server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             list_tools(&client, fmt).await?;
             client.cancel().await.ok();
         }
         Cmd::Call { tool, params, server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             call_tool(&client, &tool, &params, fmt).await?;
             client.cancel().await.ok();
         }
         Cmd::Resources { server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             list_resources(&client, fmt).await?;
             client.cancel().await.ok();
         }
         Cmd::Read { uri, server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             read_resource(&client, &uri, fmt).await?;
             client.cancel().await.ok();
         }
         Cmd::Prompts { server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             list_prompts(&client, fmt).await?;
             client.cancel().await.ok();
         }
         Cmd::Prompt { name, params, server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             get_prompt(&client, &name, &params, fmt).await?;
             client.cancel().await.ok();
         }
         Cmd::Shell { server } => {
-            let client = connect(&server.server).await?;
+            let client = connect(&server).await?;
             run_shell(&client, fmt).await?;
             client.cancel().await.ok();
         }
@@ -163,7 +187,8 @@ async fn main() -> Result<()> {
 }
 
 /// Connect to a server: a URL → Streamable HTTP, anything else → stdio command.
-async fn connect(server: &[String]) -> Result<Client> {
+async fn connect(spec: &ServerSpec) -> Result<Client> {
+    let server = spec.resolve()?;
     let head = &server[0];
     if head.starts_with("http://") || head.starts_with("https://") {
         let transport = StreamableHttpClientTransport::from_uri(head.clone());

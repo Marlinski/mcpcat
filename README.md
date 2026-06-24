@@ -28,6 +28,24 @@ The `SERVER` argument selects the transport automatically:
 
 > Options such as `-p` must come **before** the `SERVER` spec.
 
+### Default server via environment
+
+If you omit `SERVER`, mcpcat reads it from `MCPCAT_SERVER`, so every command
+works without repeating the address:
+
+```sh
+export MCPCAT_SERVER=http://localhost:3001/mcp
+mcpcat tools
+mcpcat call echo -p '{"message":"hi"}'
+mcpcat shell
+
+# stdio works too — the variable holds a whole command line:
+export MCPCAT_SERVER="docker exec -i mcp-everything mcp-server-everything stdio"
+mcpcat tools
+```
+
+An explicit `SERVER` argument always overrides the variable.
+
 ## Usage
 
 ```sh
